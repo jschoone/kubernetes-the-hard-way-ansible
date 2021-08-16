@@ -1,0 +1,79 @@
+---
+- name: Provisioning a CA and Generating TLS Certificates
+  hosts: controller-0
+  vars:
+    cert_path: /var/tmp
+  tasks:
+  - name: Generate CA private key
+    community.crypto.openssl_privatekey:
+      path: "{{ cert_path }}/ca-key.pem"
+
+  - name: Create CA CSR
+    community.crypto.openssl_csr:
+      path: "{{ cert_path }}/ca.csr"
+      privatekey_path: "{{ cert_path }}/ca-key.pem"
+      common_name: "Kubernetes"
+      country_name: "US"
+      locality_name: "Portland"
+      organization_name: "Kubernetes"
+      organizational_unit_name: "CA"
+      state_or_province_name: "Oregon"
+
+  - name: Provisiong CA
+    community.crypto.x509_certificate:
+      path: "{{ cert_path }}/ca.pem"
+      provider: selfsigned
+      privatekey_path: "{{ cert_path }}/ca-key.pem"
+      csr_path: "{{ cert_path }}/ca.csr"
+
+  - name: Generate Admin private key
+    community.crypto.openssl_privatekey:
+      path: "{{ cert_path }}/admin-key.pem"
+
+  - name: Create Admin Client Cert CSR
+    community.crypto.openssl_csr:
+      path: "{{ cert_path }}/admin.csr"
+      privatekey_path: "{{ cert_path }}/admin-key.pem"
+      common_name: "Kubernetes"
+      country_name: "US"
+      locality_name: "Portland"
+      organization_name: "system:masters"
+      organizational_unit_name: "Kubernetes The Hard Way"
+      state_or_province_name: "Oregon"
+
+
+  - name: Create Admin Client Cert
+    community.crypto.x509_certificate:
+      path: "{{ cert_path }}/admin.pem"
+      csr_path: "{{ cert_path }}/admin.csr"
+      ownca_path: "{{ cert_path }}/ca.pem"
+      ownca_privatekey_path: "{{ cert_path }}/ca-key.pem"
+      provider: ownca
+
+  - name: Generate worker private keys
+    community.crypto.openssl_privatekey:
+      path: "{{ cert_path }}/{{ item }}-key.pem"
+    loop: "{{ query('inventory_hostnames', 'worker*') }}"
+
+  - name: Create Node Cert CSRs
+    community.crypto.openssl_csr:
+      path: "{{ cert_path }}/{{ item }}.csr"
+      privatekey_path: "{{ cert_path }}/{{ item }}-key.pem"
+      common_name: "Kubernetes"
+      country_name: "US"
+      locality_name: "Portland"
+      organization_name: "system:nodes"
+      organizational_unit_name: "Kubernetes The Hard Way"
+      state_or_province_name: "Oregon"
+      subject_alt_name: "IP:{{ hostvars[item]['ansible_host'] }}"
+    loop: "{{ query('inventory_hostnames', 'worker*') }}"
+
+
+  - name: Create Node Certs
+    community.crypto.x509_certificate:
+      path: "{{ cert_path }}/{{ item }}.pem"
+      csr_path: "{{ cert_path }}/{{ item }}.csr"
+      ownca_path: "{{ cert_path }}/ca.pem"
+      ownca_privatekey_path: "{{ cert_path }}/ca-key.pem"
+      provider: ownca
+    loop: "{{ query('inventory_hostnames', 'worker*') }}"

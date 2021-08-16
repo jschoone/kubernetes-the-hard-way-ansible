@@ -1,0 +1,15 @@
+---
+- name: Debug playbook
+  hosts: localhost
+  connection: local
+  tasks:
+  - name: Print worker ip
+    ansible.builtin.debug:
+      #msg: "{{ hostvars[item]['ansible_facts']['eth1']['ipv4']['address'] }}"
+      var: hostvars[item]['ansible_host']
+    loop: "{{ query('inventory_hostnames', 'worker*') }}"
+
+  - name: Generate {{ item }} private key
+    community.crypto.openssl_privatekey:
+      path: "/var/tmp/{{ item }}-key.pem"
+    loop: "{{ query('inventory_hostnames', 'worker*') }}"

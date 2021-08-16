@@ -1,0 +1,21 @@
+---
+- name: Installing the Client Tools
+  hosts: controller-0
+  become: true
+  vars:
+    cfssl_version: 1.4.1
+    cfssl_url: https://storage.googleapis.com/kubernetes-the-hard-way/cfssl/{{ cfssl_version }}/linux/cfssl
+    cfssljson_url: https://storage.googleapis.com/kubernetes-the-hard-way/cfssl/{{ cfssl_version }}/linux/cfssljson
+    kubectl_version: 1.21.0
+    kubectl_url: https://storage.googleapis.com/kubernetes-release/release/v{{ kubectl_version }}/bin/linux/amd64/kubectl
+
+  tasks:
+  - name: Install cfssl
+    get_url:
+      mode: 0755
+      url: "{{ item }}"
+      dest: /usr/local/bin/
+    with_items:
+    - "{{ cfssl_url }}"
+    - "{{ cfssljson_url }}"
+    - "{{ kubectl_url }}"

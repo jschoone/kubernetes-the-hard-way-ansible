@@ -1,0 +1,45 @@
+---
+- name: Setup nodes
+  hosts: all
+  become: true
+  vars:
+    deploy_user: "ansible"
+    deploy_user_sshkey: https://github.com/jschoone.keys
+  tasks:
+  - name: Add Group {{ deploy_user }}
+    ansible.builtin.group:
+      name: "{{ deploy_user }}"
+  - name: Add User {{ deploy_user }}
+    ansible.builtin.user:
+      name: "{{ deploy_user }}"
+      group: "{{ deploy_user }}"
+      shell: "/bin/bash"
+  - name: Add Authorized Keys for {{ deploy_user }}
+    ansible.posix.authorized_key:
+      user: "{{ deploy_user }}"
+      key: "{{ deploy_user_sshkey }}"
+  - name: Add sudoers for user {{ deploy_user }}
+    ansible.builtin.lineinfile:
+      create: true
+      line: "{{ deploy_user }} ALL=(ALL) NOPASSWD:ALL"
+      path: /etc/sudoers.d/{{ deploy_user }}
+  - name: Set hostname to {{ inventory_hostname }}
+    hostname:
+      name: "{{ inventory_hostname }}"
+  - name: Build /etc/hosts file
+    ansible.builtin.blockinfile:
+      create: true
+      path: /etc/hosts
+      block: |
+          {% for host in groups['all'] %}
+          {{ hostvars[host]['ansible_facts']['eth1']['ipv4']['address'] }} {{ host }}
+          {% endfor %}
+  - name: Build inventory hosts
+    ansible.builtin.blockinfile:
+      create: true
+      path: "{{ playbook_dir }}/hosts"
+      block: |
+          {% for host in groups['all'] %}
+          {{ host }} ansible_host={{ hostvars[host]['ansible_facts']['eth1']['ipv4']['address'] }} ansible_user={{ deploy_user }}
+          {% endfor %}
+    delegate_to: localhost
