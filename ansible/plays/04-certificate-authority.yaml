@@ -2,7 +2,6 @@
 - name: Provisioning a CA and Generating TLS Certificates
   hosts: controller-0
   vars:
-    cert_path: /var/tmp
     kubernetes_hostnames:
     - "kubernetes"
     - "kubernetes.default"
@@ -125,8 +124,6 @@
     - kubernetes-key
     - service-account
     - service-account-key
-    cert_path: /var/tmp
-    cert_dest_path: "/home/{{ ansible_user }}"
   tasks:
   - name: synchronize worker certs
     synchronize:

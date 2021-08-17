@@ -1,0 +1,26 @@
+---
+- name: Generating the Data Encryption Key and Config
+  hosts: controller-0
+  tasks:
+  - name: Get Encryption Config Stats
+    stat:
+      path: "{{ kubeconfig_path }}/encryption-config.yaml"
+    register: encconfig
+
+  - name: The Encryption Config File
+    ansible.builtin.template:
+      src: encryption-config.yaml.j2
+      dest: "{{ kubeconfig_path }}/encryption-config.yaml"
+    when: not encconfig.stat.exists
+
+- name: Distribute Kubeconfigs
+  hosts: all
+  user: ansible
+  gather_facts: False
+  tasks:
+  - name: distribute encryption config
+    synchronize:
+      src: "{{ kubeconfig_path }}/encryption-config.yaml"
+      dest: "{{ kubeconfig_dest_path }}/encryption-config.yaml"
+    delegate_to: controller-0
+    when: "'controller' in inventory_hostname"

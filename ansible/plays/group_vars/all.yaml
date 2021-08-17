@@ -1,0 +1,5 @@
+---
+cert_path: /home/{{ ansible_user }}
+cert_dest_path: "{{ cert_path }}"
+kubeconfig_path: "{{ cert_path }}"
+kubeconfig_dest_path: "{{ cert_path }}"
