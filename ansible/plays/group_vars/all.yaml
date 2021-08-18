@@ -1,5 +1,11 @@
 ---
-cert_path: /home/{{ ansible_user }}
+ansible_homedir: /home/{{ ansible_user }}
+cert_path: "{{ ansible_homedir }}"
 cert_dest_path: "{{ cert_path }}"
 kubeconfig_path: "{{ cert_path }}"
 kubeconfig_dest_path: "{{ cert_path }}"
+
+etcd_version: 3.4.15
+etcd_url: https://github.com/etcd-io/etcd/releases/download/v{{ etcd_version }}/etcd-v{{ etcd_version }}-linux-amd64.tar.gz
+etcd_name: "{{ inventory_hostname }}"
+etcd_internal_ip: "{{ ansible_host }}"

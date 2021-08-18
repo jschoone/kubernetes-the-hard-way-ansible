@@ -1,0 +1,76 @@
+---
+- name: Bootstrapping the etcd Cluster
+  hosts: controller*
+  become: true
+  gather_facts: false
+  handlers:
+  - name: restart etcd
+    ansible.builtin.service:
+      name: etcd
+      state: restarted
+  - name: daemon-reload
+    ansible.builtin.systemd:
+      daemon_reload: yes
+
+  tasks:
+  - name: Download and extract etcd
+    ansible.builtin.unarchive:
+      remote_src: yes
+      dest: "{{ ansible_homedir }}"
+      src: "{{ etcd_url }}"
+  - name: Install etcd
+    ansible.builtin.copy:
+      remote_src: yes
+      dest: /usr/local/bin
+      src: "{{ ansible_homedir }}/etcd-v{{ etcd_version }}-linux-amd64/{{ item }}"
+      mode: 0755
+    with_items:
+    - etcd
+    - etcdctl
+  - name: Create etcd directories
+    ansible.builtin.file:
+      path: "{{ item.dir }}"
+      mode: "{{ item.mode }}"
+      state: directory
+    with_items:
+    - { dir: "/etc/etcd", mode: "0755" }
+    - { dir: "/var/lib/etcd", mode: "0700" }
+  - name: Copy Certs to etcd Config Dir
+    ansible.builtin.copy:
+      remote_src: yes
+      dest: /etc/etcd
+      src: "{{ cert_path }}/{{ item }}.pem"
+    with_items:
+    - ca
+    - kubernetes
+    - kubernetes-key
+
+  - name: Service Preparation
+    block:
+    - name: init initial cluster variable
+      ansible.builtin.set_fact:
+        initial_cluster: [ ]
+    - name: Initial Cluster Parameter
+      ansible.builtin.set_fact:
+        initial_cluster: "{{ initial_cluster + [ item + '=https://' + hostvars[item]['ansible_host'] + ':2380' ] }}"
+      loop: "{{ query('inventory_hostnames', 'controller*') }}"
+
+    - name: Initial Cluster Parameter String
+      ansible.builtin.set_fact:
+        initial_cluster_string: "{{ ','.join(initial_cluster) }}"
+
+    - name: Create etcd systemd unit file
+      ansible.builtin.template:
+        src: etc/systemd/system/etcd.service.j2
+        dest: /etc/systemd/system/etcd.service
+      notify:
+      - daemon-reload
+      - restart etcd
+    tags:
+    - systemd
+
+  - name: enable etcd
+    ansible.builtin.service:
+      name: etcd
+      enabled: true
+      state: started

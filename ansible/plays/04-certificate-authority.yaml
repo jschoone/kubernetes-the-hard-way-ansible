@@ -8,8 +8,26 @@
     - "kubernetes.default.svc"
     - "kubernetes.default.svc.cluster"
     - "kubernetes.svc.cluster.local"
+    api_clusterip: '10.32.0.1'
 
   tasks:
+  - name: Create cfssl files
+    copy:
+      src: files/{{ item }}
+      dest: "{{ ansible_homedir }}/{{ item }}"
+    with_items:
+    - ca-config.json
+    - ca-csr.json
+    register: cfssljson
+
+  - debug: var=cfssljson
+
+  - name: Create CA with cfssl
+    shell: cfssl gencert -initca ca-csr.json | cfssljson -bare ca
+    args:
+      chdir: "{{ ansible_homedir }}"
+    when: cfssljson.changed
+
   - name: Add local Hostnames to Kubernetes Hostnames
     set_fact:
       kubernetes_hostnames: "{{ kubernetes_hostnames + [ item ] }}"
@@ -17,12 +35,12 @@
 
   - name: init iplist
     set_fact:
-      api_iplist: []
+      api_iplist: ['127.0.0.1', "{{ api_clusterip }}"]
 
   - name: Set IP List
     set_fact:
       api_iplist: "{{ api_iplist + [ hostvars[item]['ansible_host'] ] }}"
-    loop: "{{ query('inventory_hostnames', 'all:!worker*') }}"
+    loop: "{{ query('inventory_hostnames', 'loadbalancer*:controller*') }}"
 
   - name: Create SAN String IPs
     set_fact:
@@ -32,7 +50,7 @@
     community.crypto.openssl_privatekey:
       path: "{{ cert_path }}/{{ item }}-key.pem"
     with_items:
-    - "ca"
+      #    - "ca"
     - "admin"
     - "kube-controller-manager"
     - "kube-proxy"
@@ -40,6 +58,19 @@
     - "kubernetes"
     - "service-account"
     - "{{ query('inventory_hostnames', 'worker*') }}"
+
+      #  - name: Create CA CSR
+      #    community.crypto.openssl_csr:
+      #      path: "{{ cert_path }}/{{ item.name }}.csr"
+      #      privatekey_path: "{{ cert_path }}/{{ item.name }}-key.pem"
+      #      common_name: "Kubernetes"
+      #      country_name: "US"
+      #      locality_name: "Portland"
+      #      organization_name: "{{ item.org }}"
+      #      organizational_unit_name: "CA"
+      #      state_or_province_name: "Oregon"
+      #    with_items:
+      #    - { name: "ca", org: "Kubernetes" }
 
   - name: Create CSRs
     community.crypto.openssl_csr:
@@ -52,7 +83,6 @@
       organizational_unit_name: "Kubernetes The Hard Way"
       state_or_province_name: "Oregon"
     with_items:
-    - { name: "ca", org: "Kubernetes" }
     - { name: "admin", org: "system:masters" }
     - { name: "kube-controller-manager", org: "system:kube-controller-manager" }
     - { name: "kube-proxy", org: "system:node-proxier" }
@@ -84,12 +114,20 @@
       state_or_province_name: "Oregon"
       subject_alt_name: "{{ api_sans }}"
 
-  - name: Provisiong CA
-    community.crypto.x509_certificate:
-      path: "{{ cert_path }}/ca.pem"
-      provider: selfsigned
-      privatekey_path: "{{ cert_path }}/ca-key.pem"
-      csr_path: "{{ cert_path }}/ca.csr"
+        #  - name: Provisiong CA
+        #    community.crypto.x509_certificate:
+        #      path: "{{ cert_path }}/ca.pem"
+        #      provider: selfsigned
+        #      privatekey_path: "{{ cert_path }}/ca-key.pem"
+        #      csr_path: "{{ cert_path }}/ca.csr"
+        #      extended_key_usage:
+        #      - CRL Sign
+        #      - Certificate Sign
+        #      key_usage:
+        #      - CRL Sign
+        #      - Certificate Sign
+        #    tags:
+        #    - ca
 
   - name: Create Certs
     community.crypto.x509_certificate:
@@ -111,6 +149,7 @@
 - name: Distribute Certs
   hosts: all
   user: ansible
+  gather_facts: false
   vars:
     worker_certs:
     - ca
