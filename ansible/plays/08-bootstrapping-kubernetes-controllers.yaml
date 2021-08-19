@@ -1,0 +1,71 @@
+---
+- name: Bootstrapping the Kubernetes Control Plane
+  hosts: controller*
+  become: true
+  tasks:
+  - name: Create kubernetes dirs
+    ansible.builtin.file:
+      path: "{{ item }}"
+      recurse: true
+      state: directory
+    with_items:
+    - "{{ kube_dirs }}"
+  - name: Download and Install the Kubernetes Controller Binaries
+    ansible.builtin.get_url:
+      url: "{{ item }}"
+      dest: "{{ bin_path }}/"
+      mode: '0755'
+    with_items:
+    - "{{ kube_controller_bin_urls }}"
+  - name: Configure Kubernetes API Server
+    ansible.builtin.copy:
+      remote_src: true
+      src: "{{ ansible_homedir }}/{{ item }}"
+      dest: "/var/lib/kubernetes/"
+    with_items:
+    - ca.pem
+    - ca-key.pem
+    - kubernetes-key.pem
+    - kubernetes.pem
+    - service-account-key.pem
+    - service-account.pem
+    - encryption-config.yaml
+
+  - name: Service Preparation
+    block:
+    - name: init initial cluster variable
+      ansible.builtin.set_fact:
+        etcd_servers: [ ]
+    - name: Initial Cluster Parameter
+      ansible.builtin.set_fact:
+        etcd_servers: "{{ etcd_servers + [ 'https://' + hostvars[item]['ansible_host'] + ':2379' ] }}"
+      loop: "{{ query('inventory_hostnames', 'controller*') }}"
+
+    - name: Initial Cluster Parameter String
+      ansible.builtin.set_fact:
+        etcd_servers_string: "{{ ','.join(etcd_servers) }}"
+
+    - name: Create kube-apiserver systemd unit file
+      ansible.builtin.template:
+        src: etc/systemd/system/kube-apiserver.service.j2
+        dest: /etc/systemd/system/kube-apiserver.service
+      register: api_service
+    tags:
+    - systemd
+
+  - name: enable kube-apiserver
+    ansible.builtin.service:
+      name: kube-apiserver
+      state: started
+      enabled: true
+
+  - name: restart apiserver and reload systemd daemon
+    block:
+    - name: daemon-reload
+      ansible.builtin.systemd:
+        daemon_reload: yes
+    - name: restart apiserver
+      ansible.builtin.service:
+        name: kube-apiserver
+        state: restarted
+    when: api_service.changed

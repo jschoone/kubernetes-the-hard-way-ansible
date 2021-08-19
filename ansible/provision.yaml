@@ -43,3 +43,11 @@
           {{ host }} ansible_host={{ hostvars[host]['ansible_facts']['eth1']['ipv4']['address'] }} ansible_user={{ deploy_user }}
           {% endfor %}
     delegate_to: localhost
+  - name: Disable swap permanently
+    ansible.builtin.systemd:
+      service: swap.target
+      masked: true
+    register: mask_swap
+  - name: Disable swap
+    shell: swapoff -a
+    when: mask_swap.changed

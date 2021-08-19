@@ -4,8 +4,22 @@ cert_path: "{{ ansible_homedir }}"
 cert_dest_path: "{{ cert_path }}"
 kubeconfig_path: "{{ cert_path }}"
 kubeconfig_dest_path: "{{ cert_path }}"
+bin_path: /usr/local/bin
+
+internal_ip: "{{ ansible_host }}"
 
 etcd_version: 3.4.15
 etcd_url: https://github.com/etcd-io/etcd/releases/download/v{{ etcd_version }}/etcd-v{{ etcd_version }}-linux-amd64.tar.gz
 etcd_name: "{{ inventory_hostname }}"
 etcd_internal_ip: "{{ ansible_host }}"
+
+kube_version: 1.21.0
+kube_controller_bin_urls:
+- "https://storage.googleapis.com/kubernetes-release/release/v{{ kube_version }}/bin/linux/amd64/kube-apiserver"
+- "https://storage.googleapis.com/kubernetes-release/release/v{{ kube_version }}/bin/linux/amd64/kube-controller-manager"
+- "https://storage.googleapis.com/kubernetes-release/release/v{{ kube_version }}/bin/linux/amd64/kube-scheduler"
+- "https://storage.googleapis.com/kubernetes-release/release/v{{ kube_version }}/bin/linux/amd64/kubectl"
+kube_internal_ip: "{{ internal_ip }}"
+kube_dirs:
+- /var/lib/kubernetes
+- /etc/kubernetes/config

@@ -1,0 +1,7 @@
+---
+- import_playbook: 02-client-tools.yaml
+- import_playbook: 04-certificate-authority.yaml
+- import_playbook: 05-kubernetes-configuration-files.yaml
+- import_playbook: 06-data-encryption-keys.yaml
+- import_playbook: 07-bootstrapping-etcd.yaml
+- import_playbook: 08-bootstrapping-kubernetes-controllers.yaml
