@@ -25,7 +25,7 @@ Vagrant.configure("2") do |config|
           libvirt.memory = "#{memory}"
           libvirt.cpus = 2
       end
-      vm_config.vm.provider "virtualbox" do |vb|
+      node.vm.provider "virtualbox" do |vb|
           vb.memory = "#{memory}"
           vb.cpus = 2
       end
