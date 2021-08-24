@@ -2,14 +2,70 @@
 - name: Debug playbook
   hosts: localhost
   connection: local
+  vars:
+    cert_path: /var/tmp
+    kubernetes_hostnames:
+    - "kubernetes"
+    - "kubernetes.default"
+    - "kubernetes.default.svc"
+    - "kubernetes.default.svc.cluster"
+    - "kubernetes.svc.cluster.local"
+    ips: "{{ hostvars[query('inventory_hostnames', 'all')]['ansible_host'] }}"
   tasks:
-  - name: Print worker ip
-    ansible.builtin.debug:
-      #msg: "{{ hostvars[item]['ansible_facts']['eth1']['ipv4']['address'] }}"
-      var: hostvars[item]['ansible_host']
-    loop: "{{ query('inventory_hostnames', 'worker*') }}"
+    #  - name: Print worker ip
+    #    ansible.builtin.debug:
+    #      #msg: "{{ hostvars[item]['ansible_facts']['eth1']['ipv4']['address'] }}"
+    #      var: hostvars[item]['ansible_host']
+    #    loop: "{{ query('inventory_hostnames', 'worker*') }}"
+    #
+    #  - name: Generate {{ item }} private key
+    #    community.crypto.openssl_privatekey:
+    #      path: "/var/tmp/{{ item }}-key.pem"
+    #    loop: "{{ query('inventory_hostnames', 'worker*') }}"
 
-  - name: Generate {{ item }} private key
-    community.crypto.openssl_privatekey:
-      path: "/var/tmp/{{ item }}-key.pem"
-    loop: "{{ query('inventory_hostnames', 'worker*') }}"
+  - name: Add local Hostnames to Kubernetes Hostnames
+    set_fact:
+      kubernetes_hostnames: "{{ kubernetes_hostnames + [ item ] }}"
+    loop: "{{ query('inventory_hostnames', 'all:!worker*') }}"
+
+  - name: Create SAN String
+    debug:
+      msg: "DNS:{{ ',DNS:'.join((kubernetes_hostnames)) }}"
+
+  - name: init iplist
+    set_fact:
+      iplist: []
+
+  - name: Set IP List
+    set_fact:
+      iplist: "{{ iplist + [ hostvars[item]['ansible_host'] ] }}"
+    loop: "{{ query('inventory_hostnames', 'all:!worker*') }}"
+
+      #  - name: Add Hostnames to List
+      #    set_fact:
+      #      iplist: "{{ iplist + [ item ] }}"
+      #    loop: "{{ query('inventory_hostnames', 'all:!worker*') }}"
+
+  - name: Create SAN String IPs
+    set_fact:
+      api_sans: "IP:{{ ',IP:'.join((iplist)) }},DNS:{{ ',DNS:'.join((kubernetes_hostnames)) }}"
+
+  - name: Print SANs
+    debug:
+      var: api_sans
+
+  - name: Sync Pull task - Executed on  the Destination host "{{groups['app'][1]}}"
+    hosts: "{{groups['app'][0]}}"
+    user: wlsusr
+    tasks:   
+      - name: Copy the file from mwiapp01 to mwiapp02 using Method Pull
+        tags: sync-pull
+        synchronize:
+          src: "{{ item }}"
+          dest: "{{ item }}"
+          mode: pull
+        delegate_to: "{{groups['app'][1]}}"
+        register: syncfile
+        run_once: true
+        with_items:
+         - "/tmp/app01-to-app02.jar"

@@ -1,8 +1,8 @@
 ---
 - name: Generating Kubernetes Configuration Files for Authentication
-  hosts: controller-0
+  hosts: controller[0]
   vars:
-    loadbalancer_ip: "{{ hostvars['loadbalancer-0']['ansible_host'] }}"
+    loadbalancer_ip: "{{ hostvars[groups['loadbalancer'] | first]['ansible_host'] }}"
   tasks:
   - name: Create Worker Kubeconfigs
     ansible.builtin.shell: |
@@ -14,16 +14,17 @@
 
       kubectl config set-credentials system:node:{{ item }} \
         --client-certificate={{ cert_path }}/{{ item }}.pem \
-        --client-key={{ cert_path }}/{ item }}-key.pem \
+        --client-key={{ cert_path }}/{{ item }}-key.pem \
         --embed-certs=true \
         --kubeconfig={{ item }}.kubeconfig
 
       kubectl config set-context default \
-        --cluster=kubernetes-the-hard-way \ --user=system:node:{{ item }} \
+        --cluster=kubernetes-the-hard-way \
+        --user=system:node:{{ item }} \
         --kubeconfig={{ item }}.kubeconfig
 
       kubectl config use-context default --kubeconfig={{ item }}.kubeconfig
-    loop: "{{ query('inventory_hostnames', 'worker*') }}"
+    loop: "{{ query('inventory_hostnames', 'worker') }}"
 
   - name: Create Admin Kubeconfig
     ansible.builtin.shell: |
@@ -31,21 +32,21 @@
         --certificate-authority={{ cert_path }}/ca.pem \
         --embed-certs=true \
         --server=https://127.0.0.1:6443 \
-        --kubeconfig={{ item }}.kubeconfig
+        --kubeconfig={{ ansible_homedir }}/admin.kubeconfig
 
-      kubectl config set-credentials system:node:{{ item }} \
-        --client-certificate={{ cert_path }}/{{ item }}.pem \
-        --client-key={{ cert_path }}/{ item }}-key.pem \
+      kubectl config set-credentials admin \
+        --client-certificate={{ cert_path }}/admin.pem \
+        --client-key={{ cert_path }}/admin-key.pem \
         --embed-certs=true \
-        --kubeconfig={{ item }}.kubeconfig
+        --kubeconfig={{ ansible_homedir }}/admin.kubeconfig
 
       kubectl config set-context default \
         --cluster=kubernetes-the-hard-way \
-        --user={{ item }} \
-        --kubeconfig={{ item }}.kubeconfig
+        --user=admin \
+        --kubeconfig={{ ansible_homedir }}/admin.kubeconfig
 
-      kubectl config use-context default --kubeconfig={{ item }}.kubeconfig
-    with_items:
+      kubectl config use-context default --kubeconfig={{ ansible_homedir }}/admin.kubeconfig
+    tags:
     - admin
 
   - name: Create other Kubeconfigs
@@ -56,9 +57,9 @@
         --server=https://{{ item.server }}:6443 \
         --kubeconfig={{ item.name }}.kubeconfig
 
-      kubectl config set-credentials system:node:{{ item.name }} \
+      kubectl config set-credentials system:{{ item.name }} \
         --client-certificate={{ cert_path }}/{{ item.name }}.pem \
-        --client-key={{ cert_path }}/{ item.name }}-key.pem \
+        --client-key={{ cert_path }}/{{ item.name }}-key.pem \
         --embed-certs=true \
         --kubeconfig={{ item.name }}.kubeconfig
 
@@ -89,16 +90,16 @@
     synchronize:
       src: "{{ kubeconfig_path }}/{{ item }}.kubeconfig"
       dest: "{{ kubeconfig_dest_path }}/{{ item }}.kubeconfig"
-    delegate_to: controller-0
+    delegate_to: "{{ groups['controller'] | first }}"
     with_items:
     - "{{ worker_kubeconfigs }}"
-    when: "'worker' in inventory_hostname"
+    when: "'worker' in group_names"
 
   - name: distribute controller kubeconfigs
     synchronize:
       src: "{{ kubeconfig_path }}/{{ item }}.kubeconfig"
       dest: "{{ kubeconfig_dest_path }}/{{ item }}.kubeconfig"
-    delegate_to: controller-0
+    delegate_to: "{{ groups['controller'] | first }}"
     with_items:
     - "{{ controller_kubeconfigs }}"
-    when: "'controller' in inventory_hostname"
+    when: "'controller' in group_names"

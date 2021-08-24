@@ -1,6 +1,6 @@
 ---
 - name: Bootstrapping the etcd Cluster
-  hosts: controller*
+  hosts: controller
   become: true
   gather_facts: false
   handlers:
@@ -53,7 +53,7 @@
     - name: Initial Cluster Parameter
       ansible.builtin.set_fact:
         initial_cluster: "{{ initial_cluster + [ item + '=https://' + hostvars[item]['ansible_host'] + ':2380' ] }}"
-      loop: "{{ query('inventory_hostnames', 'controller*') }}"
+      loop: "{{ query('inventory_hostnames', 'controller') }}"
 
     - name: Initial Cluster Parameter String
       ansible.builtin.set_fact:

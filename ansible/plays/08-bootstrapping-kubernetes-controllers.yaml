@@ -1,7 +1,12 @@
 ---
 - name: Bootstrapping the Kubernetes Control Plane
-  hosts: controller*
+  hosts: controller
   become: true
+  handlers:
+  - name: restart nginx
+    service:
+      name: nginx
+      state: restarted
   tasks:
   - name: Create kubernetes dirs
     ansible.builtin.file:
@@ -39,7 +44,7 @@
     - name: Initial Cluster Parameter
       ansible.builtin.set_fact:
         etcd_servers: "{{ etcd_servers + [ 'https://' + hostvars[item]['ansible_host'] + ':2379' ] }}"
-      loop: "{{ query('inventory_hostnames', 'controller*') }}"
+      loop: "{{ query('inventory_hostnames', 'controller') }}"
 
     - name: Initial Cluster Parameter String
       ansible.builtin.set_fact:
@@ -53,11 +58,48 @@
     tags:
     - systemd
 
-  - name: enable kube-apiserver
+  - name: Move the kube-controller-manager kubeconfig into place
+    ansible.builtin.copy:
+      remote_src: true
+      src: "{{ ansible_homedir }}/{{ item }}"
+      dest: "/var/lib/kubernetes/"
+    with_items:
+    - kube-controller-manager.kubeconfig
+
+  - name: Create kube-controller-manager systemd unit file
+    ansible.builtin.template:
+      src: etc/systemd/system/kube-controller-manager.service.j2
+      dest: /etc/systemd/system/kube-controller-manager.service
+    register: cm_service
+
+  - name: Move the kube-scheduler kubeconfig into place
+    ansible.builtin.copy:
+      remote_src: true
+      src: "{{ ansible_homedir }}/{{ item }}"
+      dest: "/var/lib/kubernetes/"
+    with_items:
+    - kube-scheduler.kubeconfig
+
+  - name: Create the kube-scheduler.yaml configuration file
+    ansible.builtin.template:
+      src: etc/kubernetes/config/kube-scheduler.yaml.j2
+      dest: /etc/kubernetes/config/kube-scheduler.yaml
+
+  - name: Create kube-scheduler systemd unit file
+    ansible.builtin.template:
+      src: etc/systemd/system/kube-scheduler.service.j2
+      dest: /etc/systemd/system/kube-scheduler.service
+    register: scheduler_service
+
+  - name: enable services
     ansible.builtin.service:
-      name: kube-apiserver
+      name: "{{ item }}"
       state: started
       enabled: true
+    with_items:
+    - kube-apiserver
+    - kube-controller-manager
+    - kube-scheduler
 
   - name: restart apiserver and reload systemd daemon
     block:
@@ -69,3 +111,134 @@
         name: kube-apiserver
         state: restarted
     when: api_service.changed
+
+  - name: restart controller-manager and reload systemd daemon
+    block:
+    - name: daemon-reload
+      ansible.builtin.systemd:
+        daemon_reload: yes
+    - name: restart controller-manager
+      ansible.builtin.service:
+        name: kube-controller-manager
+        state: restarted
+    when: cm_service.changed
+
+  - name: restart scheduler and reload systemd daemon
+    block:
+    - name: daemon-reload
+      ansible.builtin.systemd:
+        daemon_reload: yes
+    - name: restart scheduler
+      ansible.builtin.service:
+        name: kube-scheduler
+        state: restarted
+    when: scheduler_service.changed
+
+  - name: Enable HTTP Health Checks
+    block:
+    - name: Install basic web server to handle HTTP health checks
+      package:
+        name: nginx
+    - name: Configure health check in nginx
+      template:
+        src: etc/nginx/sites-available/kubernetes.default.svc.cluster.local.j2
+        dest: /etc/nginx/sites-available/kubernetes.default.svc.cluster.local
+      notify:
+      - restart nginx
+    - name: Link nginx config to sites-enabled
+      file:
+        src: /etc/nginx/sites-available/kubernetes.default.svc.cluster.local
+        dest: /etc/nginx/sites-enabled/kubernetes.default.svc.cluster.local
+        state: link
+    - name: enable nginx
+      service:
+        name: nginx
+        enabled: true
+        state: started
+    tags:
+    - healthcheck
+
+- name: RBAC for Kubelet Authorization
+  hosts: controller[0]
+  tasks:
+  - name: Create ClusterRole
+    shell: |
+      cat << EOF | kubectl apply --kubeconfig {{ ansible_homedir }}/admin.kubeconfig -f -
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRole
+      metadata:
+        annotations:
+          rbac.authorization.kubernetes.io/autoupdate: "true"
+        labels:
+          kubernetes.io/bootstrapping: rbac-defaults
+        name: system:kube-apiserver-to-kubelet
+      rules:
+        - apiGroups:
+            - ""
+          resources:
+            - nodes/proxy
+            - nodes/stats
+            - nodes/log
+            - nodes/spec
+            - nodes/metrics
+          verbs:
+            - "*"
+      EOF
+    tags:
+    - rbac
+  - name: Create ClusterRoleBinding
+    shell: |
+      cat << EOF | kubectl apply --kubeconfig {{ ansible_homedir }}/admin.kubeconfig -f -
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: system:kube-apiserver
+        namespace: ""
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: system:kube-apiserver-to-kubelet
+      subjects:
+        - apiGroup: rbac.authorization.k8s.io
+          kind: User
+          name: kubernetes
+      EOF
+    tags:
+    - rbac
+
+- name: The Kubernetes Frontend Load Balancer
+  hosts: loadbalancer
+  become: true
+  handlers:
+  - name: restart haproxy
+    ansible.builtin.service:
+      name: haproxy
+      state: restarted
+
+  tasks:
+  - name: Install HAProxy
+    ansible.builtin.apt:
+      name: haproxy
+      state: present
+      update_cache: true
+    when: ansible_os_family == "Debian"
+
+  - name: Install HAProxy for not Debian Distributions
+    ansible.builtin.apt:
+      name: haproxy
+      state: present
+      update_cache: true
+    when: ansible_os_family != "Debian"
+
+  - name: Enable HAProxy
+    ansible.builtin.service:
+      name: haproxy
+      enabled: true
+      state: started
+
+  - name: Configure HAProxy
+    ansible.builtin.template:
+      src: etc/haproxy/haproxy.cfg.j2
+      dest: /etc/haproxy/haproxy.cfg
+    notify:
+    - restart haproxy

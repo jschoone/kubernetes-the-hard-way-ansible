@@ -35,14 +35,31 @@
           {{ hostvars[host]['ansible_facts']['eth1']['ipv4']['address'] }} {{ host }}
           {% endfor %}
   - name: Build inventory hosts
+    delegate_to: localhost
     ansible.builtin.blockinfile:
       create: true
       path: "{{ playbook_dir }}/hosts"
       block: |
+          [controller]
           {% for host in groups['all'] %}
-          {{ host }} ansible_host={{ hostvars[host]['ansible_facts']['eth1']['ipv4']['address'] }} ansible_user={{ deploy_user }}
+          {% if "controller" in host %}
+          {{ host }} ansible_host={{ hostvars[host]['ansible_facts']['eth1']['ipv4']['address'] | default( hostvars[host]['ansible_ssh_host'] ) }} ansible_user={{ deploy_user }}
+          {% endif %}
           {% endfor %}
-    delegate_to: localhost
+
+          [worker]
+          {% for host in groups['all'] %}
+          {% if "worker" in host %}
+          {{ host }} ansible_host={{ hostvars[host]['ansible_facts']['eth1']['ipv4']['address'] | default( hostvars[host]['ansible_ssh_host'] ) }} ansible_user={{ deploy_user }}
+          {% endif %}
+          {% endfor %}
+
+          [loadbalancer]
+          {% for host in groups['all'] %}
+          {% if "loadbalancer" in host %}
+          {{ host }} ansible_host={{ hostvars[host]['ansible_facts']['eth1']['ipv4']['address'] | default( hostvars[host]['ansible_ssh_host'] ) }} ansible_user={{ deploy_user }}
+          {% endif %}
+          {% endfor %}
   - name: Disable swap permanently
     ansible.builtin.systemd:
       service: swap.target

@@ -1,6 +1,6 @@
 ---
 - name: Provisioning a CA and Generating TLS Certificates
-  hosts: controller-0
+  hosts: controller[0]
   vars:
     kubernetes_hostnames:
     - "kubernetes"
@@ -31,7 +31,7 @@
   - name: Add local Hostnames to Kubernetes Hostnames
     set_fact:
       kubernetes_hostnames: "{{ kubernetes_hostnames + [ item ] }}"
-    loop: "{{ query('inventory_hostnames', 'all:!worker*') }}"
+    loop: "{{ query('inventory_hostnames', 'controller:loadbalancer') }}"
 
   - name: init iplist
     set_fact:
@@ -40,7 +40,7 @@
   - name: Set IP List
     set_fact:
       api_iplist: "{{ api_iplist + [ hostvars[item]['ansible_host'] ] }}"
-    loop: "{{ query('inventory_hostnames', 'loadbalancer*:controller*') }}"
+    loop: "{{ query('inventory_hostnames', 'loadbalancer:controller') }}"
 
   - name: Create SAN String IPs
     set_fact:
@@ -57,7 +57,7 @@
     - "kube-scheduler"
     - "kubernetes"
     - "service-account"
-    - "{{ query('inventory_hostnames', 'worker*') }}"
+    - "{{ query('inventory_hostnames', 'worker') }}"
 
       #  - name: Create CA CSR
       #    community.crypto.openssl_csr:
@@ -100,7 +100,7 @@
       organizational_unit_name: "Kubernetes The Hard Way"
       state_or_province_name: "Oregon"
       subject_alt_name: "IP:{{ hostvars[item]['ansible_host'] }},DNS:{{ item }}"
-    loop: "{{ query('inventory_hostnames', 'worker*') }}"
+    loop: "{{ query('inventory_hostnames', 'worker') }}"
 
   - name: Create API Server CSR
     community.crypto.openssl_csr:
@@ -144,7 +144,7 @@
     - "kube-scheduler"
     - "kubernetes"
     - "service-account"
-    - "{{ query('inventory_hostnames', 'worker*') }}"
+    - "{{ query('inventory_hostnames', 'worker') }}"
 
 - name: Distribute Certs
   hosts: all
@@ -168,16 +168,16 @@
     synchronize:
       src: "{{ cert_path }}/{{ item }}.pem"
       dest: "{{ cert_dest_path }}/{{ item }}.pem"
-    delegate_to: controller-0
+    delegate_to: "{{ groups['controller'] | first }}"
     with_items:
     - "{{ worker_certs }}"
-    when: "'worker' in inventory_hostname"
+    when: "'worker' in group_names"
 
   - name: synchronize controller certs
     synchronize:
       src: "{{ cert_path }}/{{ item }}.pem"
       dest: "{{ cert_dest_path }}/{{ item }}.pem"
-    delegate_to: controller-0
+    delegate_to: "{{ groups['controller'] | first }}"
     with_items:
     - "{{ controller_certs }}"
-    when: "'controller' in inventory_hostname"
+    when: "'controller' in group_names"

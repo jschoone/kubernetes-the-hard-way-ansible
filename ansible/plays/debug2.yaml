@@ -1,0 +1,12 @@
+- name: Copy worker Certs
+  hosts: controller-0
+  user: ansible
+  tasks:
+  - name: Get information on generated certificate
+    community.crypto.x509_certificate_info:
+      path: /var/tmp/ca.pem
+    register: result
+
+  - name: Dump information
+    ansible.builtin.debug:
+      var: result

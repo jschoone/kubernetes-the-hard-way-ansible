@@ -1,6 +1,6 @@
 ---
 - name: Generating the Data Encryption Key and Config
-  hosts: controller-0
+  hosts: controller[0]
   tasks:
   - name: Get Encryption Config Stats
     stat:
@@ -22,5 +22,5 @@
     synchronize:
       src: "{{ kubeconfig_path }}/encryption-config.yaml"
       dest: "{{ kubeconfig_dest_path }}/encryption-config.yaml"
-    delegate_to: controller-0
-    when: "'controller' in inventory_hostname"
+    delegate_to: "{{ groups['controller'] | first }}"
+    when: "'controller' in group_names"
