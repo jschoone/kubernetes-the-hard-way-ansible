@@ -1,0 +1,13 @@
+#jinja2: lstrip_blocks: 'True'
+network:
+ version: 2
+ renderer: networkd
+ ethernets:
+   eth1:
+     routes:
+     {% for host in groups['worker'] %}
+     {% if inventory_hostname != host %}
+     - to: 10.200.{{ hostvars[host]['inventory_hostname'] | last }}.0/24
+       via: {{ hostvars[host]['ansible_host'] }}
+     {% endif %}
+     {% endfor %}

@@ -1,23 +1,23 @@
 ---
 - name: Test loop
-  hosts: loadbalancer
+  hosts: all
   user: ansible
-  vars:
-    deploy_user: "{{ ansible_user }}"
+  become: true
+  gather_facts: false
   tasks:
-  - name: HAProxy.cfg
-    ansible.builtin.debug:
+  - name: Print Netplan Config
+    debug:
       msg: |
-       frontend kubernetes
-           bind {{ ansible_host }}:6443
-           option tcplog
-           mode tcp
-           default_backend kubernetes-master-nodes
-
-       backend kubernetes-master-nodes
-           mode tcp
-           balance roundrobin
-           option tcp-check
-           {% for host in groups['controller'] %}
-           server {{ host }} {{ hostvars[host]['ansible_host'] }}:6443 check fall 3 rise 2
-           {% endfor %}
+        #jinja2: lstrip_blocks: 'True'
+        "network:
+           version: 2
+           renderer: networkd
+           ethernets:
+             eth1:
+               routes:
+               {% for host in groups['worker'] %}
+               {% if inventory_hostname != host %}
+               - to: 10.200.{{ hostvars[host]['inventory_hostname'] | last }}.0/24
+                 via: {{ hostvars[host]['ansible_host'] }}
+               {% endif %}
+               {% endfor %}"

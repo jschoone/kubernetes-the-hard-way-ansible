@@ -5,7 +5,6 @@ Vagrant.configure("2") do |config|
   WORKERNODES=3
   LB=1
   node_name="node"
-  memory="512"
   N = CONTROLLERNODES+WORKERNODES+LB
   (1..N).each do |node_id|
     if node_id <= N-WORKERNODES-LB
@@ -15,9 +14,11 @@ Vagrant.configure("2") do |config|
     elsif node_id > N-WORKERNODES-LB && node_id <= N-LB
       node_name="worker-#{node_id-1-CONTROLLERNODES}"
       ip = "10.240.0.2#{node_id-1-CONTROLLERNODES}"
+      memory = "512"
     else
       node_name="loadbalancer-#{node_id-1-CONTROLLERNODES-WORKERNODES}"
       ip = "10.240.0.3#{node_id-1-CONTROLLERNODES-WORKERNODES}"
+      memory = "512"
     end
     config.vm.define "#{node_name}" do |node|
       node.vm.box = "generic/ubuntu2004"

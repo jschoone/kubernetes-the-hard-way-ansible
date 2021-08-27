@@ -23,3 +23,31 @@ kube_internal_ip: "{{ internal_ip }}"
 kube_dirs:
 - /var/lib/kubernetes
 - /etc/kubernetes/config
+
+runc_version: 1.0.0-rc93
+cni_plugins_version: 0.9.1
+containerd_version: 1.4.4
+kube_worker_bin_urls:
+- "https://storage.googleapis.com/kubernetes-release/release/v{{ kube_version }}/bin/linux/amd64/kubectl"
+- "https://storage.googleapis.com/kubernetes-release/release/v{{ kube_version }}/bin/linux/amd64/kube-proxy"
+- "https://storage.googleapis.com/kubernetes-release/release/v{{ kube_version }}/bin/linux/amd64/kubelet"
+cni_url: "https://github.com/containernetworking/plugins/releases/download/v{{ cni_plugins_version }}/cni-plugins-linux-amd64-v{{ cni_plugins_version }}.tgz"
+cni_bin_dir: /opt/cni/bin
+cni_cfg_dir: /etc/cni/net.d
+containerd_dir: "{{ ansible_homedir }}/containerd"
+containerd_config_dir: /etc/containerd
+containerd_url: "https://github.com/containerd/containerd/releases/download/v{{ containerd_version }}/containerd-{{ containerd_version }}-linux-amd64.tar.gz"
+cri_tools_url: "https://github.com/kubernetes-sigs/cri-tools/releases/download/v{{ kube_version }}/crictl-v{{ kube_version }}-linux-amd64.tar.gz"
+runc_url: "https://github.com/opencontainers/runc/releases/download/v{{ runc_version }}/runc.amd64"
+kube_worker_dirs:
+- "{{ cni_cfg_dir }}"
+- "{{ cni_bin_dir }}"
+- /var/lib/kubelet
+- /var/lib/kube-proxy
+- /var/lib/kubernetes
+- /var/run/kubernetes
+- "{{ containerd_dir }}"
+- "{{ containerd_config_dir }}"
+
+pod_cidr: "10.200.{{ inventory_hostname | last }}.0/24"
+cluster_cidr: "10.200.0.0/16"

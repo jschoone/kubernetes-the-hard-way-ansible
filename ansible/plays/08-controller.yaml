@@ -7,6 +7,22 @@
     service:
       name: nginx
       state: restarted
+  - name: restart kube-apiserver
+    systemd:
+      name: kube-apiserver
+      state: restarted
+      daemon-reload: true
+  - name: restart kube-controller-manager
+    systemd:
+      name: kube-controller-manager
+      state: restarted
+      daemon-reload: true
+  - name: restart kube-scheduler
+    systemd:
+      name: kube-scheduler
+      state: restarted
+      daemon-reload: true
+
   tasks:
   - name: Create kubernetes dirs
     ansible.builtin.file:
@@ -15,6 +31,7 @@
       state: directory
     with_items:
     - "{{ kube_dirs }}"
+
   - name: Download and Install the Kubernetes Controller Binaries
     ansible.builtin.get_url:
       url: "{{ item }}"
@@ -22,6 +39,7 @@
       mode: '0755'
     with_items:
     - "{{ kube_controller_bin_urls }}"
+
   - name: Configure Kubernetes API Server
     ansible.builtin.copy:
       remote_src: true
@@ -54,7 +72,7 @@
       ansible.builtin.template:
         src: etc/systemd/system/kube-apiserver.service.j2
         dest: /etc/systemd/system/kube-apiserver.service
-      register: api_service
+      notify: restart kube-apiserver
     tags:
     - systemd
 
@@ -70,7 +88,7 @@
     ansible.builtin.template:
       src: etc/systemd/system/kube-controller-manager.service.j2
       dest: /etc/systemd/system/kube-controller-manager.service
-    register: cm_service
+    notify: restart kube-controller-manager
 
   - name: Move the kube-scheduler kubeconfig into place
     ansible.builtin.copy:
@@ -89,7 +107,7 @@
     ansible.builtin.template:
       src: etc/systemd/system/kube-scheduler.service.j2
       dest: /etc/systemd/system/kube-scheduler.service
-    register: scheduler_service
+    notify: restart kube-scheduler
 
   - name: enable services
     ansible.builtin.service:
@@ -101,44 +119,13 @@
     - kube-controller-manager
     - kube-scheduler
 
-  - name: restart apiserver and reload systemd daemon
-    block:
-    - name: daemon-reload
-      ansible.builtin.systemd:
-        daemon_reload: yes
-    - name: restart apiserver
-      ansible.builtin.service:
-        name: kube-apiserver
-        state: restarted
-    when: api_service.changed
-
-  - name: restart controller-manager and reload systemd daemon
-    block:
-    - name: daemon-reload
-      ansible.builtin.systemd:
-        daemon_reload: yes
-    - name: restart controller-manager
-      ansible.builtin.service:
-        name: kube-controller-manager
-        state: restarted
-    when: cm_service.changed
-
-  - name: restart scheduler and reload systemd daemon
-    block:
-    - name: daemon-reload
-      ansible.builtin.systemd:
-        daemon_reload: yes
-    - name: restart scheduler
-      ansible.builtin.service:
-        name: kube-scheduler
-        state: restarted
-    when: scheduler_service.changed
-
   - name: Enable HTTP Health Checks
     block:
     - name: Install basic web server to handle HTTP health checks
-      package:
+      apt:
         name: nginx
+        state: present
+        update_cache: true
     - name: Configure health check in nginx
       template:
         src: etc/nginx/sites-available/kubernetes.default.svc.cluster.local.j2

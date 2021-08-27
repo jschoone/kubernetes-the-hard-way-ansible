@@ -1,0 +1,13 @@
+---
+- name: Provisioning Pod Network Routes
+  hosts: all
+  become: true
+  handlers:
+  - name: apply netplan
+    shell: netplan apply
+  tasks:
+  - name: Create Pod network routes
+    ansible.builtin.template:
+      src: etc/netplan/99-pod_routes.yaml.j2
+      dest: /etc/netplan/99-pod_routes.yaml
+    notify: apply netplan

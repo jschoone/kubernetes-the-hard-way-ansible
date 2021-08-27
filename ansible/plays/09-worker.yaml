@@ -1,0 +1,166 @@
+---
+- name: Bootstrapping the Kubernetes Worker Nodes
+  hosts: worker
+  become: true
+  gather_facts: false
+  vars:
+    os_dependencies:
+    - socat
+    - conntrack
+    - ipset
+  handlers:
+  - name: restart containerd
+    systemd:
+      name: containerd
+      state: restarted
+      daemon_reload: true
+  - name: restart kubelet
+    systemd:
+      name: kubelet
+      state: restarted
+      daemon_reload: true
+  - name: restart kube-proxy
+    systemd:
+      name: kube-proxy
+      state: restarted
+      daemon_reload: true
+  tasks:
+  - name: Install the OS dependencies
+    ansible.builtin.package:
+      name: "{{ os_dependencies }}"
+      state: present
+
+  - name: Create kubernetes dirs
+    ansible.builtin.file:
+      path: "{{ item }}"
+      recurse: true
+      state: directory
+    with_items:
+    - "{{ kube_worker_dirs }}"
+
+  - name: Download and Install the Worker Binaries
+    ansible.builtin.get_url:
+      url: "{{ item }}"
+      dest: "{{ bin_path }}/"
+      mode: '0755'
+    with_items:
+    - "{{ kube_worker_bin_urls }}"
+
+  - name: Extract CNI Plugins
+    ansible.builtin.unarchive:
+      src: "{{ cni_url }}"
+      remote_src: true
+      dest: "{{ cni_bin_dir }}"
+
+  - name: Extract containerd
+    ansible.builtin.unarchive:
+      src: "{{ containerd_url }}"
+      remote_src: true
+      dest: "{{ containerd_dir }}"
+
+  - name: Find containerd binaries
+    ansible.builtin.find:
+      paths: "{{ containerd_dir }}/bin"
+    register: containerd_bins
+    tags:
+    - cpbin
+
+  - name: Copy containerd binaries
+    ansible.builtin.copy:
+      remote_src: true
+      src: "{{ item.path }}"
+      dest: /bin/
+      mode: '0755'
+    with_items:
+    - "{{ containerd_bins.files }}"
+    tags:
+    - cpbin
+
+  - name: Install crictl
+    ansible.builtin.unarchive:
+      src: "{{ cri_tools_url }}"
+      remote_src: true
+      dest: "{{ bin_path }}/"
+      mode: '0755'
+
+  - name: Install runc
+    ansible.builtin.get_url:
+      url: "{{ runc_url }}"
+      dest: "{{ bin_path }}/runc"
+      mode: '0755'
+    tags:
+    - runc
+
+  - name: Configure CNI Networking
+    block:
+    - name: Create the bridge network configuration file
+      ansible.builtin.template:
+        src: etc/cni/net.d/10-bridge.conf.j2
+        dest: /etc/cni/net.d/10-bridge.conf
+
+    - name: Create the loopback network configuration file
+      ansible.builtin.template:
+        src: etc/cni/net.d/99-loopback.conf.j2
+        dest: /etc/cni/net.d/99-loopback.conf
+    tags:
+    - cni
+
+  - name: Configure containerd
+    block:
+    - name: Create the containerd configuration file
+      ansible.builtin.template:
+        src: etc/containerd/config.toml.j2
+        dest: /etc/containerd/config.toml
+
+    - name: Create the containerd.service systemd unit file
+      ansible.builtin.template:
+        src: etc/systemd/system/containerd.service.j2
+        dest: /etc/systemd/system/containerd.service
+      notify: restart containerd
+    tags:
+    - containerd
+
+  - name: Configure Kubelet
+    block:
+    - name: Move Certs and Kubeconfig
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ ansible_homedir }}/{{ item.file }}"
+        dest: "{{ item.dest }}"
+      with_items:
+        - { file: "{{ inventory_hostname }}-key.pem", dest: /var/lib/kubelet/ }
+        - { file: "{{ inventory_hostname }}.pem", dest: /var/lib/kubelet/ }
+        - { file: "{{ inventory_hostname }}.kubeconfig", dest: /var/lib/kubelet/kubeconfig }
+        - { file: "ca.pem", dest: /var/lib/kubernetes/ }
+
+    - name: Create the kubelet-config.yaml configuration file
+      ansible.builtin.template:
+        src: var/lib/kubelet/kubelet-config.yaml.j2
+        dest: /var/lib/kubelet/kubelet-config.yaml
+
+    - name: Create the kubelet.service systemd unit file
+      ansible.builtin.template:
+        src: etc/systemd/system/kubelet.service.j2
+        dest: /etc/systemd/system/kubelet.service
+    notify: restart kubelet
+
+  - name: Configure the Kubernetes Proxy
+    block:
+    - name: Copy kubeconfig
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ ansible_homedir }}/{{ item.file }}"
+        dest: "{{ item.dest }}"
+      with_items:
+        - { file: kube-proxy.kubeconfig, dest: /var/lib/kube-proxy/kubeconfig }
+
+    - name: Configure kube-proxy
+      ansible.builtin.template:
+        src: var/lib/kube-proxy/kube-proxy-config.yaml.j2
+        dest: /var/lib/kube-proxy/kube-proxy-config.yaml
+
+    - name: Create the kube-proxy.service systemd unit file
+      ansible.builtin.template:
+        src: etc/systemd/system/kube-proxy.service.j2
+        dest: /etc/systemd/system/kube-proxy.service
+    notify: restart kube-proxy

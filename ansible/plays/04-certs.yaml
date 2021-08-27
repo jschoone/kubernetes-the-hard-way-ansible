@@ -59,41 +59,28 @@
     - "service-account"
     - "{{ query('inventory_hostnames', 'worker') }}"
 
-      #  - name: Create CA CSR
-      #    community.crypto.openssl_csr:
-      #      path: "{{ cert_path }}/{{ item.name }}.csr"
-      #      privatekey_path: "{{ cert_path }}/{{ item.name }}-key.pem"
-      #      common_name: "Kubernetes"
-      #      country_name: "US"
-      #      locality_name: "Portland"
-      #      organization_name: "{{ item.org }}"
-      #      organizational_unit_name: "CA"
-      #      state_or_province_name: "Oregon"
-      #    with_items:
-      #    - { name: "ca", org: "Kubernetes" }
-
   - name: Create CSRs
     community.crypto.openssl_csr:
       path: "{{ cert_path }}/{{ item.name }}.csr"
       privatekey_path: "{{ cert_path }}/{{ item.name }}-key.pem"
-      common_name: "Kubernetes"
+      common_name: "{{ item.cn }}"
       country_name: "US"
       locality_name: "Portland"
       organization_name: "{{ item.org }}"
       organizational_unit_name: "Kubernetes The Hard Way"
       state_or_province_name: "Oregon"
     with_items:
-    - { name: "admin", org: "system:masters" }
-    - { name: "kube-controller-manager", org: "system:kube-controller-manager" }
-    - { name: "kube-proxy", org: "system:node-proxier" }
-    - { name: "kube-scheduler", org: "kube-scheduler" }
-    - { name: "service-account", org: "Kubernetes" }
+    - { name: "admin", org: "system:masters", cn: "admin" }
+    - { name: "kube-controller-manager", org: "system:kube-controller-manager", cn: "system:kube-controller-manager" }
+    - { name: "kube-proxy", org: "system:node-proxier", cn: "system:kube-proxy" }
+    - { name: "kube-scheduler", org: "kube-scheduler", cn: "system:kube-scheduler" }
+    - { name: "service-account", org: "Kubernetes", cn: "service-accounts" }
 
   - name: Create Node CSRs
     community.crypto.openssl_csr:
       path: "{{ cert_path }}/{{ item }}.csr"
       privatekey_path: "{{ cert_path }}/{{ item }}-key.pem"
-      common_name: "Kubernetes"
+      common_name: "system:node:{{ item }}"
       country_name: "US"
       locality_name: "Portland"
       organization_name: "system:nodes"
@@ -106,10 +93,10 @@
     community.crypto.openssl_csr:
       path: "{{ cert_path }}/kubernetes.csr"
       privatekey_path: "{{ cert_path }}/kubernetes-key.pem"
-      common_name: "Kubernetes"
+      common_name: "kubernetes"
       country_name: "US"
       locality_name: "Portland"
-      organization_name: "system:nodes"
+      organization_name: "Kubernetes"
       organizational_unit_name: "Kubernetes The Hard Way"
       state_or_province_name: "Oregon"
       subject_alt_name: "{{ api_sans }}"
