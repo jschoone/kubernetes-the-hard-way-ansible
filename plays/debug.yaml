@@ -14,7 +14,7 @@
   tasks:
     #  - name: Print worker ip
     #    ansible.builtin.debug:
-    #      #msg: "{{ hostvars[item]['ansible_facts']['eth1']['ipv4']['address'] }}"
+    #      #msg: "{{ hostvars[item]['ansible_facts'][internal_interface]['ipv4']['address'] }}"
     #      var: hostvars[item]['ansible_host']
     #    loop: "{{ query('inventory_hostnames', 'worker*') }}"
     #

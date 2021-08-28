@@ -39,7 +39,7 @@
 
   - name: Set IP List
     set_fact:
-      api_iplist: "{{ api_iplist + [ hostvars[item]['ansible_host'] ] }}"
+      api_iplist: "{{ api_iplist + [ hostvars[item]['ansible_facts'][internal_interface]['ipv4']['address'] ] }}"
     loop: "{{ query('inventory_hostnames', 'loadbalancer:controller') }}"
 
   - name: Create SAN String IPs
@@ -86,7 +86,7 @@
       organization_name: "system:nodes"
       organizational_unit_name: "Kubernetes The Hard Way"
       state_or_province_name: "Oregon"
-      subject_alt_name: "IP:{{ hostvars[item]['ansible_host'] }},DNS:{{ item }}"
+      subject_alt_name: "IP:{{ hostvars[item]['ansible_facts'][internal_interface]['ipv4']['address'] }},DNS:{{ item }}"
     loop: "{{ query('inventory_hostnames', 'worker') }}"
 
   - name: Create API Server CSR

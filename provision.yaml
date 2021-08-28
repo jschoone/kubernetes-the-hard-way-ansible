@@ -5,6 +5,7 @@
   vars:
     deploy_user: "ansible"
     deploy_user_sshkey: https://github.com/jschoone.keys
+    internal_interface: 'eth1'
   tasks:
   - name: Add Group {{ deploy_user }}
     ansible.builtin.group:
@@ -16,8 +17,11 @@
       shell: "/bin/bash"
   - name: Add Authorized Keys for {{ deploy_user }}
     ansible.posix.authorized_key:
-      user: "{{ deploy_user }}"
+      user: "{{ item }}"
       key: "{{ deploy_user_sshkey }}"
+    with_items:
+    - "{{ deploy_user }}"
+    - "vagrant"
   - name: Add sudoers for user {{ deploy_user }}
     ansible.builtin.lineinfile:
       create: true
@@ -32,10 +36,11 @@
       path: /etc/hosts
       block: |
           {% for host in groups['all'] %}
-          {{ hostvars[host]['ansible_facts']['eth1']['ipv4']['address'] }} {{ host }}
+          {{ hostvars[host]['ansible_facts'][internal_interface]['ipv4']['address'] }} {{ host }}
           {% endfor %}
   - name: Build inventory hosts
     delegate_to: localhost
+    become: false
     ansible.builtin.blockinfile:
       create: true
       path: "{{ playbook_dir }}/hosts"
@@ -43,21 +48,21 @@
           [controller]
           {% for host in groups['all'] %}
           {% if "controller" in host %}
-          {{ host }} ansible_host={{ hostvars[host]['ansible_facts']['eth1']['ipv4']['address'] | default( hostvars[host]['ansible_ssh_host'] ) }} ansible_user={{ deploy_user }}
+          {{ host }} ansible_host={{ hostvars[host]['ansible_facts'][internal_interface]['ipv4']['address'] | default( hostvars[host]['ansible_ssh_host'] ) }} ansible_user={{ deploy_user }}
           {% endif %}
           {% endfor %}
 
           [worker]
           {% for host in groups['all'] %}
           {% if "worker" in host %}
-          {{ host }} ansible_host={{ hostvars[host]['ansible_facts']['eth1']['ipv4']['address'] | default( hostvars[host]['ansible_ssh_host'] ) }} ansible_user={{ deploy_user }}
+          {{ host }} ansible_host={{ hostvars[host]['ansible_facts'][internal_interface]['ipv4']['address'] | default( hostvars[host]['ansible_ssh_host'] ) }} ansible_user={{ deploy_user }}
           {% endif %}
           {% endfor %}
 
           [loadbalancer]
           {% for host in groups['all'] %}
           {% if "loadbalancer" in host %}
-          {{ host }} ansible_host={{ hostvars[host]['ansible_facts']['eth1']['ipv4']['address'] | default( hostvars[host]['ansible_ssh_host'] ) }} ansible_user={{ deploy_user }}
+          {{ host }} ansible_host={{ hostvars[host]['ansible_facts'][internal_interface]['ipv4']['address'] | default( hostvars[host]['ansible_ssh_host'] ) }} ansible_user={{ deploy_user }}
           {% endif %}
           {% endfor %}
   - name: Disable swap permanently

@@ -1,4 +1,5 @@
 ---
+- import_playbook: common.yaml
 - import_playbook: 02-client-tools.yaml
 - import_playbook: 04-certs.yaml
 - import_playbook: 05-kubeconfig.yaml
@@ -6,3 +7,6 @@
 - import_playbook: 07-etcd.yaml
 - import_playbook: 08-controller.yaml
 - import_playbook: 09-worker.yaml
+- import_playbook: 10-remote-access.yaml
+- import_playbook: 11-pod-routes.yaml
+- import_playbook: 12-dns-addon.yaml

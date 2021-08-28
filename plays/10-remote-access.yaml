@@ -2,7 +2,7 @@
 - name: Configuring kubectl for Remote Access
   hosts: controller[0]
   vars:
-    loadbalancer_ip: "{{ hostvars[groups['loadbalancer'] | first]['ansible_host'] }}"
+    loadbalancer_ip: "{{ hostvars[groups['loadbalancer'] | first]['ansible_facts'][internal_interface]['ipv4']['address'] }}"
   tasks:
   - name: Create Admin Kubeconfig
     ansible.builtin.shell: |

@@ -1,0 +1,26 @@
+---
+- name: Prerequisites
+  hosts: all
+  become: true
+  vars:
+    packages:
+    - vim
+    - ripgrep
+    - htop
+    - tcpdump
+  tasks:
+  - name: Install packages
+    apt:
+      name: "{{ packages }}"
+      state: present
+      update_cache: true
+
+  - name: Modprobe br_netfilter
+    modprobe:
+      name: br_netfilter
+      state: present
+
+  - name: Set br_netfilter persistent
+    copy:
+      dest: /etc/modules-load.d/br_netfilter.conf
+      content: "br_netfilter"

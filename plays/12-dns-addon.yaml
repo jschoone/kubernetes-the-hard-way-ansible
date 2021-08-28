@@ -1,0 +1,20 @@
+---
+- name: Deploying the DNS Cluster Add-on
+  hosts: controller[0]
+  gather_facts: false
+  handlers:
+  - name: apply coredns
+    shell: kubectl apply -f {{ coredns_manifest_dest }}
+  tasks:
+  - name: Download CoreDNS manifests
+    get_url:
+      url: "{{ coredns_url }}"
+      dest: "{{ coredns_manifest_dest }}"
+
+  - name: Fix "no next plugin found" Bug
+    lineinfile:
+      path: "{{ coredns_manifest_dest }}"
+      insertafter: 'prometheus :9153'
+      line: '        forward . /etc/resolv.conf'
+    notify:
+    - apply coredns

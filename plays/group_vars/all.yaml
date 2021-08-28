@@ -7,6 +7,7 @@ kubeconfig_dest_path: "{{ cert_path }}"
 bin_path: /usr/local/bin
 
 internal_ip: "{{ ansible_host }}"
+internal_interface: 'eth1'
 
 etcd_version: 3.4.15
 etcd_url: https://github.com/etcd-io/etcd/releases/download/v{{ etcd_version }}/etcd-v{{ etcd_version }}-linux-amd64.tar.gz
@@ -51,3 +52,6 @@ kube_worker_dirs:
 
 pod_cidr: "10.200.{{ inventory_hostname | last }}.0/24"
 cluster_cidr: "10.200.0.0/16"
+
+coredns_url: https://storage.googleapis.com/kubernetes-the-hard-way/coredns-1.8.yaml
+coredns_manifest_dest: "{{ ansible_homedir }}/coredns.yaml"

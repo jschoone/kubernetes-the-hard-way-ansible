@@ -35,8 +35,13 @@ Vagrant.configure("2") do |config|
       if node_id == N
         node.vm.provision :ansible do |ansible|
           ansible.limit = "all"
-          ansible.playbook = "ansible/provision.yaml"
+          ansible.playbook = "provision.yaml"
         end
+#        node.vm.provision :ansible do |ansible|
+#          ansible.limit = "all"
+#          ansible.playbook = "plays/site.yaml"
+#          ansible.inventory_path = "hosts"
+#        end
       end
     end
   end
