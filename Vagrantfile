@@ -1,17 +1,18 @@
 Vagrant.configure("2") do |config|
   config.proxy.enabled = false
+  config.ssh.insert_key = false
   ENV['VAGRANT_DEFAULT_PROVIDER'] = 'libvirt'
   CONTROLLERNODES=3
   WORKERNODES=3
-  LB=1
+  LBNODES=1
   node_name="node"
-  N = CONTROLLERNODES+WORKERNODES+LB
+  N = CONTROLLERNODES+WORKERNODES+LBNODES
   (1..N).each do |node_id|
-    if node_id <= N-WORKERNODES-LB
+    if node_id <= N-WORKERNODES-LBNODES
       node_name="controller-#{node_id-1}"
       ip = "10.240.0.1#{node_id-1}"
       memory = "1024"
-    elsif node_id > N-WORKERNODES-LB && node_id <= N-LB
+    elsif node_id > N-WORKERNODES-LBNODES && node_id <= N-LBNODES
       node_name="worker-#{node_id-1-CONTROLLERNODES}"
       ip = "10.240.0.2#{node_id-1-CONTROLLERNODES}"
       memory = "512"
@@ -37,11 +38,20 @@ Vagrant.configure("2") do |config|
           ansible.limit = "all"
           ansible.playbook = "provision.yaml"
         end
-#        node.vm.provision :ansible do |ansible|
-#          ansible.limit = "all"
-#          ansible.playbook = "plays/site.yaml"
-#          ansible.inventory_path = "hosts"
-#        end
+        node.vm.provision :ansible do |ansible|
+          ansible.groups = {
+            "controller" => ["controller-[0:#{CONTROLLERNODES-1}]"],
+            "worker" => ["worker-[0:#{WORKERNODES-1}]"],
+            "loadbalancer" => ["loadbalancer-[0:#{LBNODES-1}]"],
+          }
+          ansible.playbook = "plays/site.yaml"
+          ansible.limit = "all"
+          ansible.host_key_checking = false
+          ansible.verbose =  'v'
+          ansible.extra_vars = { ansible_user: 'vagrant',
+                 ansible_connection: 'ssh',
+                 ansible_ssh_args: '-o ForwardAgent=yes -o UserKnownHostsFile=/dev/null -o AddKeysToAgent=yes'}
+        end
       end
     end
   end

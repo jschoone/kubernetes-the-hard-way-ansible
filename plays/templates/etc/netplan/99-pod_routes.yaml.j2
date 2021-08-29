@@ -8,6 +8,6 @@ network:
      {% for host in groups['worker'] %}
      {% if inventory_hostname != host %}
      - to: 10.200.{{ hostvars[host]['inventory_hostname'] | last }}.0/24
-       via: {{ hostvars[host]['ansible_facts'][internal_interface]['ipv4']['address'] }}
+       via: {{ hostvars[host]['ansible_facts'][internal_interface]['ipv4']['address'] | default(ansible_host) }}
      {% endif %}
      {% endfor %}

@@ -6,13 +6,13 @@ kubeconfig_path: "{{ cert_path }}"
 kubeconfig_dest_path: "{{ cert_path }}"
 bin_path: /usr/local/bin
 
-internal_ip: "{{ ansible_host }}"
+internal_ip: "{{ ansible_facts[internal_interface]['ipv4']['address'] | default(ansible_host) }}"
 internal_interface: 'eth1'
 
 etcd_version: 3.4.15
 etcd_url: https://github.com/etcd-io/etcd/releases/download/v{{ etcd_version }}/etcd-v{{ etcd_version }}-linux-amd64.tar.gz
 etcd_name: "{{ inventory_hostname }}"
-etcd_internal_ip: "{{ ansible_host }}"
+etcd_internal_ip: "{{ ansible_facts[internal_interface]['ipv4']['address'] | default(ansible_host) }}"
 
 kube_version: 1.21.0
 kube_controller_bin_urls:
