@@ -1,10 +1,18 @@
 ---
-ansible_homedir: /home/{{ ansible_user }}
-cert_path: "{{ ansible_homedir }}"
+data_dir: "/var/tmp"
+cert_path: "{{ data_dir }}"
 cert_dest_path: "{{ cert_path }}"
 kubeconfig_path: "{{ cert_path }}"
 kubeconfig_dest_path: "{{ cert_path }}"
 bin_path: /usr/local/bin
+
+cert_files:
+- "admin"
+- "kube-controller-manager"
+- "kube-proxy"
+- "kube-scheduler"
+- "kubernetes"
+- "service-account"
 
 internal_ip: "{{ ansible_facts[internal_interface]['ipv4']['address'] | default(ansible_host) }}"
 internal_interface: 'eth1'
@@ -35,7 +43,7 @@ kube_worker_bin_urls:
 cni_url: "https://github.com/containernetworking/plugins/releases/download/v{{ cni_plugins_version }}/cni-plugins-linux-amd64-v{{ cni_plugins_version }}.tgz"
 cni_bin_dir: /opt/cni/bin
 cni_cfg_dir: /etc/cni/net.d
-containerd_dir: "{{ ansible_homedir }}/containerd"
+containerd_dir: "{{ data_dir }}/containerd"
 containerd_config_dir: /etc/containerd
 containerd_url: "https://github.com/containerd/containerd/releases/download/v{{ containerd_version }}/containerd-{{ containerd_version }}-linux-amd64.tar.gz"
 cri_tools_url: "https://github.com/kubernetes-sigs/cri-tools/releases/download/v{{ kube_version }}/crictl-v{{ kube_version }}-linux-amd64.tar.gz"
@@ -50,8 +58,18 @@ kube_worker_dirs:
 - "{{ containerd_dir }}"
 - "{{ containerd_config_dir }}"
 
-pod_cidr: "10.200.{{ inventory_hostname | last }}.0/24"
+pod_cidr: "10.200.{{ internal_ip | last }}.0/24"
 cluster_cidr: "10.200.0.0/16"
 
 coredns_url: https://storage.googleapis.com/kubernetes-the-hard-way/coredns-1.8.yaml
-coredns_manifest_dest: "{{ ansible_homedir }}/coredns.yaml"
+coredns_manifest_dest: "{{ data_dir }}/coredns.yaml"
+
+
+kubernetes_hostnames:
+- "kubernetes"
+- "kubernetes.default"
+- "kubernetes.default.svc"
+- "kubernetes.default.svc.cluster"
+- "kubernetes.svc.cluster.local"
+api_clusterip: '10.32.0.1'
+loadbalancer_ip: "{{ hostvars[groups['loadbalancer'] | first]['ansible_facts'][internal_interface]['ipv4']['address'] | default(ansible_host) }}"

@@ -4,23 +4,31 @@
   tasks:
   - name: Get Encryption Config Stats
     stat:
-      path: "{{ kubeconfig_path }}/encryption-config.yaml"
+      path: "{{ data_dir }}/encryption-config.yaml"
     register: encconfig
 
   - name: The Encryption Config File
     ansible.builtin.template:
       src: encryption-config.yaml.j2
-      dest: "{{ kubeconfig_path }}/encryption-config.yaml"
+      dest: "{{ data_dir }}/encryption-config.yaml"
     when: not encconfig.stat.exists
 
-- name: Distribute Kubeconfigs
-  hosts: all
+- name: Encryption Config
+  hosts: controller
   user: ansible
   gather_facts: False
   tasks:
-  - name: distribute encryption config
-    synchronize:
-      src: "{{ kubeconfig_path }}/encryption-config.yaml"
-      dest: "{{ kubeconfig_dest_path }}/encryption-config.yaml"
+
+  - name: Slurp Encryption Config
     delegate_to: "{{ groups['controller'] | first }}"
-    when: "'controller' in group_names"
+    slurp:
+      src: "{{ data_dir }}/encryption-config.yaml"
+    register: encconfig_content
+
+  - debug:
+      msg: "{{ encconfig_content.content | b64decode }}"
+
+  - name: Copy Encryption Config
+    copy:
+      dest: "{{ data_dir }}/encryption-config.yaml"
+      content: "{{ encconfig_content.content | b64decode }}"

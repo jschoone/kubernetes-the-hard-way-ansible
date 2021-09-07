@@ -125,7 +125,7 @@
     - name: Move Certs and Kubeconfig
       ansible.builtin.copy:
         remote_src: true
-        src: "{{ ansible_homedir }}/{{ item.file }}"
+        src: "{{ data_dir }}/{{ item.file }}"
         dest: "{{ item.dest }}"
       with_items:
         - { file: "{{ inventory_hostname }}-key.pem", dest: /var/lib/kubelet/ }
@@ -149,7 +149,7 @@
     - name: Copy kubeconfig
       ansible.builtin.copy:
         remote_src: true
-        src: "{{ ansible_homedir }}/{{ item.file }}"
+        src: "{{ data_dir }}/{{ item.file }}"
         dest: "{{ item.dest }}"
       with_items:
         - { file: kube-proxy.kubeconfig, dest: /var/lib/kube-proxy/kubeconfig }

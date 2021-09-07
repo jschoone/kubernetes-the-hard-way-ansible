@@ -1,6 +1,6 @@
 Vagrant.configure("2") do |config|
   config.proxy.enabled = false
-  config.ssh.insert_key = false
+#  config.ssh.insert_key = false
   ENV['VAGRANT_DEFAULT_PROVIDER'] = 'libvirt'
   CONTROLLERNODES=3
   WORKERNODES=3
@@ -35,6 +35,11 @@ Vagrant.configure("2") do |config|
       node.vm.network "private_network", ip: "#{ip}"
       if node_id == N
         node.vm.provision :ansible do |ansible|
+          ansible.groups = {
+            "controller" => ["controller-[0:#{CONTROLLERNODES-1}]"],
+            "worker" => ["worker-[0:#{WORKERNODES-1}]"],
+            "loadbalancer" => ["loadbalancer-[0:#{LBNODES-1}]"],
+          }
           ansible.limit = "all"
           ansible.playbook = "provision.yaml"
         end
@@ -46,11 +51,6 @@ Vagrant.configure("2") do |config|
           }
           ansible.playbook = "plays/site.yaml"
           ansible.limit = "all"
-          ansible.host_key_checking = false
-          ansible.verbose =  'v'
-          ansible.extra_vars = { ansible_user: 'vagrant',
-                 ansible_connection: 'ssh',
-                 ansible_ssh_args: '-o ForwardAgent=yes -o UserKnownHostsFile=/dev/null -o AddKeysToAgent=yes'}
         end
       end
     end

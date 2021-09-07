@@ -43,7 +43,7 @@
   - name: Configure Kubernetes API Server
     ansible.builtin.copy:
       remote_src: true
-      src: "{{ ansible_homedir }}/{{ item }}"
+      src: "{{ data_dir }}/{{ item }}"
       dest: "/var/lib/kubernetes/"
     with_items:
     - ca.pem
@@ -79,7 +79,7 @@
   - name: Move the kube-controller-manager kubeconfig into place
     ansible.builtin.copy:
       remote_src: true
-      src: "{{ ansible_homedir }}/{{ item }}"
+      src: "{{ data_dir }}/{{ item }}"
       dest: "/var/lib/kubernetes/"
     with_items:
     - kube-controller-manager.kubeconfig
@@ -93,7 +93,7 @@
   - name: Move the kube-scheduler kubeconfig into place
     ansible.builtin.copy:
       remote_src: true
-      src: "{{ ansible_homedir }}/{{ item }}"
+      src: "{{ data_dir }}/{{ item }}"
       dest: "/var/lib/kubernetes/"
     with_items:
     - kube-scheduler.kubeconfig
@@ -150,7 +150,7 @@
   tasks:
   - name: Create ClusterRole
     shell: |
-      cat << EOF | kubectl apply --kubeconfig {{ ansible_homedir }}/admin.kubeconfig -f -
+      cat << EOF | kubectl apply --kubeconfig {{ data_dir }}/admin.kubeconfig -f -
       apiVersion: rbac.authorization.k8s.io/v1
       kind: ClusterRole
       metadata:
@@ -175,7 +175,7 @@
     - rbac
   - name: Create ClusterRoleBinding
     shell: |
-      cat << EOF | kubectl apply --kubeconfig {{ ansible_homedir }}/admin.kubeconfig -f -
+      cat << EOF | kubectl apply --kubeconfig {{ data_dir }}/admin.kubeconfig -f -
       apiVersion: rbac.authorization.k8s.io/v1
       kind: ClusterRoleBinding
       metadata:

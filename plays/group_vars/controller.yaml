@@ -1,0 +1,12 @@
+slurp_certs:
+- ca
+- kubernetes
+- service-account
+- ca-key
+- kubernetes-key
+- service-account-key
+
+slurp_kubeconfigs:
+- admin
+- kube-scheduler
+- kube-controller-manager

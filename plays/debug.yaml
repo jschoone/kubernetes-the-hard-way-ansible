@@ -1,71 +1,131 @@
 ---
 - name: Debug playbook
-  hosts: localhost
-  connection: local
+  hosts: worker
   vars:
-    cert_path: /var/tmp
-    kubernetes_hostnames:
+    #cert_path: ~/tmp/
+    cert_files:
+    - "admin"
+    - "kube-controller-manager"
+    - "kube-proxy"
+    - "kube-scheduler"
     - "kubernetes"
-    - "kubernetes.default"
-    - "kubernetes.default.svc"
-    - "kubernetes.default.svc.cluster"
-    - "kubernetes.svc.cluster.local"
-    ips: "{{ hostvars[query('inventory_hostnames', 'all')]['ansible_host'] }}"
+    - "service-account"
   tasks:
-    #  - name: Print worker ip
-    #    ansible.builtin.debug:
-    #      #msg: "{{ hostvars[item]['ansible_facts'][internal_interface]['ipv4']['address'] }}"
-    #      var: hostvars[item]['ansible_host']
-    #    loop: "{{ query('inventory_hostnames', 'worker*') }}"
-    #
-    #  - name: Generate {{ item }} private key
-    #    community.crypto.openssl_privatekey:
-    #      path: "/var/tmp/{{ item }}-key.pem"
-    #    loop: "{{ query('inventory_hostnames', 'worker*') }}"
+  - name: Create cfssl files
+    copy:
+      src: files/{{ item }}
+      dest: "{{ cert_path }}/{{ item }}"
+    with_items:
+    - ca-config.json
+    - ca-csr.json
+    register: cfssljson
 
-  - name: Add local Hostnames to Kubernetes Hostnames
+  - name: Create CA with cfssl
+    shell: cfssl gencert -initca ca-csr.json | cfssljson -bare ca
+    args:
+      chdir: "{{ cert_path }}"
+    when: cfssljson.changed
+  - name: Add worker to item list
     set_fact:
-      kubernetes_hostnames: "{{ kubernetes_hostnames + [ item ] }}"
-    loop: "{{ query('inventory_hostnames', 'all:!worker*') }}"
+      cert_files: "{{ cert_files + [ item ] }}"
+    loop: "{{ query('inventory_hostnames', 'worker') }}"
+    tags: slurp
 
-  - name: Create SAN String
-    debug:
-      msg: "DNS:{{ ',DNS:'.join((kubernetes_hostnames)) }}"
+  - name: Generate Private keys
+    community.crypto.openssl_privatekey:
+      path: "{{ cert_path}}/{{ item }}-key.pem"
+    loop: "{{ cert_files }}"
 
-  - name: init iplist
-    set_fact:
-      iplist: []
+  - debug: var=ansible_user
 
-  - name: Set IP List
-    set_fact:
-      iplist: "{{ iplist + [ hostvars[item]['ansible_host'] ] }}"
-    loop: "{{ query('inventory_hostnames', 'all:!worker*') }}"
+  - name: Create Node CSRs
+    community.crypto.openssl_csr:
+      path: "{{ cert_path }}/{{ item }}.csr"
+      privatekey_path: "{{ cert_path }}/{{ item }}-key.pem"
+      common_name: "system:node:{{ item }}"
+      country_name: "US"
+      locality_name: "Portland"
+      organization_name: "system:nodes"
+      organizational_unit_name: "Kubernetes The Hard Way"
+      state_or_province_name: "Oregon"
+    loop: "{{ cert_files }}"
 
-      #  - name: Add Hostnames to List
+  - name: Create Certs
+    community.crypto.x509_certificate:
+      path: "{{ cert_path }}/{{ item }}.pem"
+      csr_path: "{{ cert_path }}/{{ item }}.csr"
+      ownca_path: "{{ cert_path }}/ca.pem"
+      ownca_privatekey_path: "{{ cert_path }}/ca-key.pem"
+      provider: ownca
+      return_content: true
+    loop: "{{ cert_files }}"
+
+      #  - name: register certs in facts
       #    set_fact:
-      #      iplist: "{{ iplist + [ item ] }}"
-      #    loop: "{{ query('inventory_hostnames', 'all:!worker*') }}"
+      #      "content_{{ item | replace('-','_') }}_cert": "{{lookup('file', '~/tmp/{{ item }}.pem') }}"
+      #    loop: "{{ cert_files }}"
+      #    tags:
+      #    - copycerts
+      #
+      #
+      #  - name: register keys in facts
+      #    set_fact:
+      #      "content_{{ item | replace('-','_') }}_key": "{{ lookup('file', '~/tmp/{{ item }}-key.pem') }}"
+      #    loop: "{{ cert_files }}"
+      #    tags:
+      #    - copycerts
 
-  - name: Create SAN String IPs
-    set_fact:
-      api_sans: "IP:{{ ',IP:'.join((iplist)) }},DNS:{{ ',DNS:'.join((kubernetes_hostnames)) }}"
+- name: Distribute Worker certs
+  hosts: worker
+  tags:
+  - distribute
+  vars:
+    cert_files:
+    - ca
+    - "{{ inventory_hostname }}"
+  tasks:
+  - name: slurp keys
+    delegate_to: localhost
+    slurp:
+      src: "{{ cert_path }}/{{ static_file }}-key.pem"
+    loop: "{{ cert_files }}"
+    register: "reg_keys"
+    loop_control:
+      loop_var: static_file
 
-  - name: Print SANs
-    debug:
-      var: api_sans
+  - name: Copy key content
+    copy:
+      dest: "{{ cert_path }}/{{ item.static_file }}-key.pem"
+      content: "{{ item.content | b64decode }}"
+    loop: "{{ reg_keys['results'] }}"
+    when: item.static_file == ansible_nodename
+    no_log: True
 
-  - name: Sync Pull task - Executed on  the Destination host "{{groups['app'][1]}}"
-    hosts: "{{groups['app'][0]}}"
-    user: wlsusr
-    tasks:   
-      - name: Copy the file from mwiapp01 to mwiapp02 using Method Pull
-        tags: sync-pull
-        synchronize:
-          src: "{{ item }}"
-          dest: "{{ item }}"
-          mode: pull
-        delegate_to: "{{groups['app'][1]}}"
-        register: syncfile
-        run_once: true
-        with_items:
-         - "/tmp/app01-to-app02.jar"
+  - name: slurp certs
+    delegate_to: localhost
+    slurp:
+      src: "{{ cert_path }}/{{ static_file }}.pem"
+    loop: "{{ cert_files }}"
+    register: "reg_certs"
+    loop_control:
+      loop_var: static_file
+
+  - name: Copy key content
+    copy:
+      dest: "{{ cert_path }}/{{ item.static_file }}.pem"
+      content: "{{ item.content | b64decode }}"
+    loop: "{{ reg_certs['results'] }}"
+
+  - name: Slurp Worker Keys
+    delegate_to: "{{ groups['controller'] | first }}"
+    slurp:
+      src: "{{ cert_path }}/{{ cert_filename }}-key.pem"
+    register: key_content
+    loop: "{{ query('inventory_hostnames', inventory_hostname) }}"
+    tags: loopi
+    loop_control:
+      loop_var: cert_filename
+
+  - debug: var=item
+    loop: "{{ query('inventory_hostnames', inventory_hostname) }}"
+    tags: loopi2

@@ -4,8 +4,6 @@
 
 - name: Configuring kubectl for Remote Access
   hosts: controller[0]
-  vars:
-    loadbalancer_ip: "{{ hostvars[groups['loadbalancer'] | first]['ansible_facts'][internal_interface]['ipv4']['address'] | default(ansible_host) }}"
   tasks:
   - name: Create Admin Kubeconfig
     ansible.builtin.shell: |
@@ -26,6 +24,6 @@
       kubectl config use-context default
   - name: Download Kubeconfig
     ansible.builtin.fetch:
-      src: "{{ ansible_homedir }}/.kube/config"
+      src: "~/.kube/config"
       dest: "{{ playbook_dir }}/../kubeconfig"
       flat: true

@@ -4,6 +4,7 @@
   become: true
   vars:
     internal_interface: 'eth1'
+    deploy_user: '{{ ansible_user }}'
   tasks:
   - name: Set hostname to {{ inventory_hostname }}
     hostname:

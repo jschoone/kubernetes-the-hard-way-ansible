@@ -1,63 +1,52 @@
 ---
 - name: Provisioning a CA and Generating TLS Certificates
   hosts: controller[0]
-  vars:
-    kubernetes_hostnames:
-    - "kubernetes"
-    - "kubernetes.default"
-    - "kubernetes.default.svc"
-    - "kubernetes.default.svc.cluster"
-    - "kubernetes.svc.cluster.local"
-    api_clusterip: '10.32.0.1'
-
+  tags:
+  - create_certs
   tasks:
   - name: Create cfssl files
     copy:
       src: files/{{ item }}
-      dest: "{{ ansible_homedir }}/{{ item }}"
-    with_items:
+      dest: "{{ data_dir }}/{{ item }}"
+    loop:
     - ca-config.json
     - ca-csr.json
     register: cfssljson
 
-  - debug: var=cfssljson
-
   - name: Create CA with cfssl
     shell: cfssl gencert -initca ca-csr.json | cfssljson -bare ca
     args:
-      chdir: "{{ ansible_homedir }}"
+      chdir: "{{ data_dir }}"
     when: cfssljson.changed
 
   - name: Add local Hostnames to Kubernetes Hostnames
-    set_fact:
+    ansible.builtin.set_fact:
       kubernetes_hostnames: "{{ kubernetes_hostnames + [ item ] }}"
     loop: "{{ query('inventory_hostnames', 'controller:loadbalancer') }}"
 
   - name: init iplist
-    set_fact:
+    ansible.builtin.set_fact:
       api_iplist: ['127.0.0.1', "{{ api_clusterip }}"]
 
   - name: Set IP List
-    set_fact:
+    ansible.builtin.set_fact:
       api_iplist: "{{ api_iplist + [ hostvars[item]['ansible_facts'][internal_interface]['ipv4']['address'] | default(ansible_host) ] }}"
     loop: "{{ query('inventory_hostnames', 'loadbalancer:controller') }}"
 
   - name: Create SAN String IPs
-    set_fact:
+    ansible.builtin.set_fact:
       api_sans: "IP:{{ ',IP:'.join((api_iplist)) }},DNS:{{ ',DNS:'.join((kubernetes_hostnames)) }}"
+
+  - name: Add Worker to cert names
+    ansible.builtin.set_fact:
+      cert_files: "{{ cert_files + [ item ] }}"
+    loop: "{{ query('inventory_hostnames', 'worker') }}"
+
 
   - name: Generate Private keys
     community.crypto.openssl_privatekey:
       path: "{{ cert_path }}/{{ item }}-key.pem"
-    with_items:
-      #    - "ca"
-    - "admin"
-    - "kube-controller-manager"
-    - "kube-proxy"
-    - "kube-scheduler"
-    - "kubernetes"
-    - "service-account"
-    - "{{ query('inventory_hostnames', 'worker') }}"
+    loop: "{{ cert_files }}"
 
   - name: Create CSRs
     community.crypto.openssl_csr:
@@ -69,7 +58,7 @@
       organization_name: "{{ item.org }}"
       organizational_unit_name: "Kubernetes The Hard Way"
       state_or_province_name: "Oregon"
-    with_items:
+    loop:
     - { name: "admin", org: "system:masters", cn: "admin" }
     - { name: "kube-controller-manager", org: "system:kube-controller-manager", cn: "system:kube-controller-manager" }
     - { name: "kube-proxy", org: "system:node-proxier", cn: "system:kube-proxy" }
@@ -101,21 +90,6 @@
       state_or_province_name: "Oregon"
       subject_alt_name: "{{ api_sans }}"
 
-        #  - name: Provisiong CA
-        #    community.crypto.x509_certificate:
-        #      path: "{{ cert_path }}/ca.pem"
-        #      provider: selfsigned
-        #      privatekey_path: "{{ cert_path }}/ca-key.pem"
-        #      csr_path: "{{ cert_path }}/ca.csr"
-        #      extended_key_usage:
-        #      - CRL Sign
-        #      - Certificate Sign
-        #      key_usage:
-        #      - CRL Sign
-        #      - Certificate Sign
-        #    tags:
-        #    - ca
-
   - name: Create Certs
     community.crypto.x509_certificate:
       path: "{{ cert_path }}/{{ item }}.pem"
@@ -124,49 +98,25 @@
       ownca_privatekey_path: "{{ cert_path }}/ca-key.pem"
       provider: ownca
       return_content: true
-    with_items:
-    - "admin"
-    - "kube-controller-manager"
-    - "kube-proxy"
-    - "kube-scheduler"
-    - "kubernetes"
-    - "service-account"
-    - "{{ query('inventory_hostnames', 'worker') }}"
+    loop: "{{ cert_files }}"
 
 - name: Distribute Certs
-  hosts: all
-  user: ansible
+  hosts: worker:controller
   gather_facts: false
   tags:
   - distribute_certs
-  vars:
-    worker_certs:
-    - ca
-    - ca-key
-    - "{{ inventory_hostname }}"
-    - "{{ inventory_hostname }}-key"
-    controller_certs:
-    - ca
-    - ca-key
-    - kubernetes
-    - kubernetes-key
-    - service-account
-    - service-account-key
   tasks:
-  - name: synchronize worker certs
-    synchronize:
-      src: "{{ cert_path }}/{{ item }}.pem"
-      dest: "{{ cert_dest_path }}/{{ item }}.pem"
+  - name: Slurp Certificates
     delegate_to: "{{ groups['controller'] | first }}"
-    with_items:
-    - "{{ worker_certs }}"
-    when: "'worker' in group_names"
+    slurp:
+      src: "{{ cert_path }}/{{ cert_filename }}.pem"
+    loop: "{{ slurp_certs }}"
+    register: cert_content
+    loop_control:
+      loop_var: cert_filename
 
-  - name: synchronize controller certs
-    synchronize:
-      src: "{{ cert_path }}/{{ item }}.pem"
-      dest: "{{ cert_dest_path }}/{{ item }}.pem"
-    delegate_to: "{{ groups['controller'] | first }}"
-    with_items:
-    - "{{ controller_certs }}"
-    when: "'controller' in group_names"
+  - name: Copy Certificates
+    copy:
+      dest: "{{ cert_path }}/{{ item.cert_filename }}.pem"
+      content: "{{ item.content | b64decode }}"
+    loop: "{{ cert_content['results'] }}"

@@ -1,0 +1,8 @@
+slurp_certs:
+- ca
+- "{{ inventory_hostname }}"
+- "{{ inventory_hostname }}-key"
+
+slurp_kubeconfigs:
+- "{{ inventory_hostname }}"
+- kube-proxy
