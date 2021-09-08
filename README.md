@@ -2,5 +2,5 @@
 
 ### Usage
 ```shell
-$ vagrant up
+vagrant up
 ```
