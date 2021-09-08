@@ -148,6 +148,30 @@
 - name: RBAC for Kubelet Authorization
   hosts: controller[0]
   tasks:
+  # The next tasks needs access to API Server, but sometimes the start takes
+  # too long, so this block will wait for the Port 6443 to come up and also
+  # check the certificate since it's an HTTPS connection
+  - name: Wait for API Server coming up and check certificate
+    block:
+    - name: Get information from generated certificate
+      community.crypto.x509_certificate_info:
+        path: "{{ cert_path }}/kubernetes.pem"
+      register: local_cert
+
+    - name: Wait for API Server coming up
+      wait_for:
+        port: 6443
+        delay: 60
+
+    - name: Get the cert from API Server
+      community.crypto.get_certificate:
+        host: "127.0.0.1"
+        port: 6443
+      register: cert
+      until: cert['serial_number'] == local_cert['serial_number']
+      retries: 60
+      delay: 1
+
   - name: Create ClusterRole
     shell: |
       cat << EOF | kubectl apply --kubeconfig {{ data_dir }}/admin.kubeconfig -f -
