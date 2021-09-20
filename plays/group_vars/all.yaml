@@ -58,7 +58,7 @@ kube_worker_dirs:
 - "{{ containerd_dir }}"
 - "{{ containerd_config_dir }}"
 
-pod_cidr: "10.200.{{ internal_ip | last }}.0/24"
+pod_cidr: "10.200.{{ inventory_hostname | last }}.0/24"
 cluster_cidr: "10.200.0.0/16"
 
 coredns_url: https://storage.googleapis.com/kubernetes-the-hard-way/coredns-1.8.yaml

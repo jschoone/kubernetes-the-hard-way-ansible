@@ -51,7 +51,7 @@
         initial_cluster: [ ]
     - name: Initial Cluster Parameter
       ansible.builtin.set_fact:
-        initial_cluster: "{{ initial_cluster + [ item + '=https://' + hostvars[item]['ansible_facts'][internal_interface]['ipv4']['address'] | default(ansible_host) + ':2380' ] }}"
+        initial_cluster: "{{ initial_cluster + [ item + '=https://' + hostvars[item]['ansible_facts'][internal_interface]['ipv4']['address'] | default(hostvars[item]['ansible_host']) + ':2380' ] }}"
       loop: "{{ query('inventory_hostnames', 'controller') }}"
 
     - name: Initial Cluster Parameter String

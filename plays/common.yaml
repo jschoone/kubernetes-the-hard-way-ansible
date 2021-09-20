@@ -9,18 +9,28 @@
     - htop
     - tcpdump
   tasks:
+  - name: Disable swap permanently
+    ansible.builtin.systemd:
+      service: swap.target
+      masked: true
+    register: mask_swap
+
+  - name: Disable swap
+    ansible.builtin.shell: swapoff -a
+    when: mask_swap.changed
+
   - name: Install packages
-    apt:
+    ansible.builtin.apt:
       name: "{{ packages }}"
       state: present
       update_cache: true
 
   - name: Modprobe br_netfilter
-    modprobe:
+    ansible.builtin.modprobe:
       name: br_netfilter
       state: present
 
   - name: Set br_netfilter persistent
-    copy:
+    ansible.builtin.copy:
       dest: /etc/modules-load.d/br_netfilter.conf
       content: "br_netfilter"

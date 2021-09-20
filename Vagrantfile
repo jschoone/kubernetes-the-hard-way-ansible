@@ -1,6 +1,4 @@
 Vagrant.configure("2") do |config|
-  config.proxy.enabled = false
-#  config.ssh.insert_key = false
   ENV['VAGRANT_DEFAULT_PROVIDER'] = 'libvirt'
   CONTROLLERNODES=3
   WORKERNODES=3

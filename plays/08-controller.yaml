@@ -61,7 +61,7 @@
         etcd_servers: [ ]
     - name: Initial Cluster Parameter
       ansible.builtin.set_fact:
-        etcd_servers: "{{ etcd_servers + [ 'https://' + hostvars[item]['ansible_facts'][internal_interface]['ipv4']['address'] | default(ansible_host) + ':2379' ] }}"
+        etcd_servers: "{{ etcd_servers + [ 'https://' + hostvars[item]['ansible_facts'][internal_interface]['ipv4']['address'] | default(hostvars[item]['ansible_host']) + ':2379' ] }}"
       loop: "{{ query('inventory_hostnames', 'controller') }}"
 
     - name: Initial Cluster Parameter String
